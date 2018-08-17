@@ -1,0 +1,382 @@
+var chart_ready = false;
+var expplansall = false;
+function ofc_ready() {
+	chart_ready = true;	
+}
+
+$(document).ready(function() {
+
+	swfobject.embedSWF("chart.swf", "chart", "100%", "500", "9.0.0", "expressInstall.swf");
+
+	function findSWF(movieName) {
+		if (navigator.appName.indexOf("Microsoft")!= -1) {
+			return window[movieName];
+		} else {
+			return document[movieName];
+		}
+	}
+
+ 	chartUpdate = function(data) {
+		if (!data) {
+			$('input[name=plan]:checked').each(function() {
+				var id = $(this).val();
+				for (i in plans) {
+					if (plans[i].id == id) {
+						data = plans[i];
+						break;
+					}
+				}
+			});
+		}
+
+		if (data) {
+			data.compound = $("select[name=reinvest]").val();
+			data.principal = $("input[name=invest]").val();
+			tmp = findSWF('chart');
+			x = tmp.load( JSON.stringify(data) );
+		}
+	};
+
+	setChartData = function(elem) {
+		var id = $(elem).val();
+		for (i in plans) {
+			if (plans[i].id == id) {
+				plan = plans[i];
+				break;
+			}
+		}
+		$('#plans tr').each(function() { $(this).removeClass('active'); });
+		$(elem).parents('table:first').find('tbody').show('slide');
+		$(elem).parents('tr:first').addClass('active');
+		if (!plan) return;
+		if (plan.duration_scale == 'never') {
+			$('input[name=period]').removeAttr('disabled').val(100);
+		} else {
+			var days = 0;
+			if (plan.duration_scale.match(/^day/)) {
+				days = plan.duration_number;
+			} else if (plan.duration_scale.match(/^weekday/)) {
+				days = plan.duration_number;
+			} else if (plan.duration_scale.match(/^week/)) {
+				days = plans[id].duration_number * 7;
+			} else  if (plan.duration_scale.match(/^month/)) {
+				today = new Date();
+				years = Math.floor(plan.duration_number/12);
+				months = plans[id].duration_number - years*12;
+				end = new Date(today.getFullYear()+years, today.getMonth()+months, today.getDate());
+				days = (end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
+			} else  if (plan.duration_scale.match(/^year/)) {
+				today = new Date();
+				end = new Date(today.getFullYear()+plan.duration_number, today.getMonth(), today.getDate());
+				days = (end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
+			}
+			$('input[name=period]').attr('disabled', true).val(parseInt(days));
+		}
+
+		investObj = $('input[name=invest]');
+ 		invest = parseFloat(investObj.val());
+		if (invest < plan.min || isNaN(invest)) invest = plan.min;
+		if (plan.max > 0 && invest > plan.max) invest = plan.max;
+		investObj.val(invest.toFixed(2));
+
+/*
+		if (parseFloat(plan.max)==0) {
+			$('#invest_slider').slider({
+				value: 1,
+				min: 1,
+				max: 100,
+				disabled: true
+			});
+		} else {
+			$('#invest_slider').slider({
+				min: plan.min,
+				max: plan.max,
+				disabled: false,
+				slide: function( event, ui ) {
+					$('input[name=invest]').val(Number(ui.value).toFixed(2));
+					chartUpdate();
+				}
+			});
+			$('#invest_slider').slider({value: invest});
+		}
+*/
+		compObj = $("select[name=reinvest]");
+		compObj.empty();
+		if (plan.compoundvals) {
+			var p = plan.compoundvals.split(',');
+			for (i in p) {
+				if (p[i].match(/\-/)) {
+					se = p[i].split('-');
+					for (j = se[0]; j <= se[1]; j++) {
+						co = parseInt(j);
+						compObj.append( $('<option value="'+co+'">'+co+'</option>'));
+					}
+				} else {
+					co = parseInt(p[i]);
+					compObj.append( $('<option value="'+co+'">'+co+'</option>'));
+				}
+			}
+		} else {
+			compObj.append( $('<option value="0">0</option>'));
+		}
+	};
+
+	$('input[name=plan]').live('click', function() { setChartData(this); chartUpdate(); });
+
+	investChange = function() { 
+		id = $('input[name=plan]:checked').val();
+		for (i in plans) {
+			if (plans[i].id == id) {
+				plan = plans[i];
+				break;
+			}
+		}
+		if (!plan) return;
+
+		investObj = $(this);
+ 		invest = parseFloat(investObj.val());
+		if (invest < plan.min || isNaN(invest)) invest = plan.min;
+		if (plan.max > 0 && invest > plan.max) invest = plan.max;
+		investObj.val(invest.toFixed(2));
+
+		$('#invest_slider').slider({value:invest});
+		chartUpdate();
+	}
+	$('input[name=invest]').blur(investChange);
+	$('input[name=invest]').keyup(function() {
+		$('#invest_slider').slider({value:invest});
+		chartUpdate();
+	});
+
+	open_flash_chart_data = function() {
+		setTimeout('chartUpdate()', 1000);
+	};
+
+	var isizes = {};
+	$('.mbutton').each(function() {
+		var bigImage = $(this).children('img');
+		isizes[bigImage.attr('id')] = {};
+		bigImage.attr('width', 150);
+		bigImage.attr('height', 200);
+		var img = new Image();
+		img.onload = function() {
+			isizes[bigImage.attr('id')].width = this.width;
+			isizes[bigImage.attr('id')].height = this.height;
+			bigImage.removeClass('imgloading');
+//			bigImage.show();
+		}
+		img.onerror = function() {
+			bigImage.removeClass('imgloading');
+			bigImage.show();
+		}
+		img.src = bigImage.attr('src');
+	}).mouseover(function() {
+		var bigImage = $(this).children('img');
+//		bigImage.attr('width', isizes[bigImage.attr('id')].width);
+//		bigImage.attr('height', isizes[bigImage.attr('id')].height);
+                if (!isizes[bigImage.attr('id')].width || !isizes[bigImage.attr('id')].height) return;
+
+		bimg = $('<div><a href="'+$(this).attr('href')+'" target=_blank><img src="'+bigImage.attr('src')+'" alt="'+bigImage.attr('alt')+'" style="max-height:300px;max-width:300px;"></a></div>')
+		w = isizes[bigImage.attr('id')].width < 150 ? 150 : isizes[bigImage.attr('id')].width;
+		h = isizes[bigImage.attr('id')].height < 200 ? 200 : isizes[bigImage.attr('id')].height;
+		$('#ibox').css('left', ($(this).get(0).offsetLeft + $(this).get(0).offsetWidth / 2 - w / 2) + "px");
+		$('#ibox').css('top', ($(this).get(0).offsetTop + $(this).get(0).offsetHeight / 2 - h / 2) + "px");
+		$('#ibox').html(bimg.html()).show();
+	})
+	$('#ibox').mouseout(function() {
+//		var bigImage = $(this).children('img');
+//		bigImage.attr('width', 150);
+//		bigImage.attr('height', 200);
+		$('#ibox').css('left', -100);
+		$('#ibox').css('top',  -100);
+		$('#ibox').hide();
+	});
+
+ 	rcbUpdate = function() {
+		amnt = parseFloat($('#rcbinvest').val(), 2);
+		if (isNaN(amnt)) return;
+		fst = $('#fstdepy:checked').get(0) ? 'f' : 'r';
+
+		$('#rcb tr').each(function() {
+			$(this).removeClass('active');
+			$(this).find('.amnt').html('?');
+			min = parseInt($(this).find('.min').html());
+			max = parseInt($(this).find('.max').html());
+			if (isNaN(max)) max = 0;
+
+			if (amnt >= min && (amnt <= max || max == 0)) {
+				p = parseFloat($(this).find('.'+fst+'r').html(), 2);
+				if (isNaN(p)) return;
+				b = parseFloat($(this).find('.'+fst+'b').html(), 2);
+				if (isNaN(b)) b = 0;
+				ra = amnt*p/100 + b;
+
+				$(this).addClass('active');
+				$(this).find('.amnt').html('$'+parseFloat(ra,2).toFixed(2));
+			}
+		});
+	};
+
+	$('#fstdepy').click(rcbUpdate);
+	$('#fstdepn').click(rcbUpdate);
+	$('#rcbinvest').keyup(rcbUpdate).focus(rcbUpdate).blur(rcbUpdate);
+
+});
+
+
+startStats = function() {
+	$('#openCalc').click(function() {
+		$('#whois').hide();
+		$('#plans').toggle();
+		$('#rcb').hide();
+		$('input[name=plan]:first').each(function() {
+			this.checked = true;
+			setChartData(this);
+		});
+		return false;
+	});
+
+	$('#openWhois').click(function() {
+		$('#whois').toggle();
+		$('#plans').hide();
+		$('#rcb').hide();
+		return false;
+	});
+
+	$('#openRCB').click(function() {
+		$('#rcb').toggle();
+		$('#whois').hide();
+		$('#plans').hide();
+		return false;
+	});
+
+        var loc = window.location.hash.replace(/^\#/, '');
+        if (loc == 'calc') $('#openCalc').click();
+        if (loc == 'whois') $('#openWhois').click();
+        if (loc == 'rcb') $('#openRCB').click();
+
+
+	expname = function () {
+		l = $(this).parents('table:first').find('.expplans');
+		if ($(this).is(':visible')) {
+			l.html('&laquo;');
+		} else {
+			l.html('&raquo;');
+		}
+	}
+	$('.plansTable thead').live('click', function () {
+		tb = $(this).parents('table:first').find('tbody');
+		tb.slideToggle(expname);
+	});
+
+	$('#expplansall').live('click', function () {
+		$('.plansTable').each(function() {
+			if ($(this).hasClass('calcTable')) return;
+			tb = $(this).find('tbody');
+			l = $(this).find('.expplans');
+			if (expplansall) {
+				tb.hide('fast', expname);
+			} else {
+				tb.show('fast', expname);
+			}
+		});
+		expplansall = !expplansall;
+		if (expplansall) {
+			$(this).html('&laquo; Close All');
+		} else {
+			$(this).html('Expand All &raquo;');
+		}
+	});
+};
+
+
+fillPlans = function(data) {
+	if (data) {
+		for (i in data) {
+			t = $('<table class="plansTable" cellspacing=1 cellpadding=0><thead><tr><th colspan=9>'+i+' <span class="expplans">&raquo;</span></th></tr></thead>'+
+			'<tbody style="display:none"><tr><th></th><th>Name</th><th>Amount</th><th>Profit</th><th>Period</th><th>Bonus</th><th>Compound</th><th class="pret">Principal Return</th><th class="prel">Principal Release</th></tr></tbody></table>');
+			for (j in data[i]) {
+				data[i][j].compoundvals = data[i][j].compound;
+				data[i][j].min = parseFloat(data[i][j].min_spend);
+				data[i][j].max = parseFloat(data[i][j].max_spend);
+				data[i][j].period_every = parseInt(data[i][j].period_every);
+				data[i][j].duration_number = parseInt(data[i][j].duration_number);
+				data[i][j].percent = parseFloat(data[i][j].percent);
+				data[i][j].bonus_amount = parseFloat(data[i][j].bonus_amount);
+				data[i][j].principal_back = parseFloat(data[i][j].principal_back);
+				data[i][j].principal_release = parseFloat(data[i][j].principal_release);
+
+				plans.push(data[i][j]);
+				tr = $('<tr>'
+ 					+'<td><input type="radio" name="plan" value="'+data[i][j].id+'"></td>'
+					+'<td>'+data[i][j].name+'</td>'
+					+'<td>$'+data[i][j].min_spend+' - '+(data[i][j].max_spend>0 ? '$'+data[i][j].max_spend : 'and more')+'</td>'
+					+'<td>'+data[i][j].percent+'% '+(data[i][j].period_scale == 'onmaturity' ? 'on maturity' : 'every '+data[i][j].period_every+' '+data[i][j].period_scale)+'</td>'
+					+'<td>'+(data[i][j].duration_scale == 'never' ? 'infinity' : data[i][j].duration_number+' '+data[i][j].duration_scale)+'</td>'
+					+'<td>'+(data[i][j].bonus_amount > 0 ? (data[i][j].bonus_worth != '%' ? data[i][j].bonus_amount+data[i][j].bonus_worth : data[i][j].bonus_amount+'%') : '-')+'</td>'
+					+'<td>'+(data[i][j].compound ? data[i][j].compound : '-')+'</td>'
+					+'<td>'+(data[i][j].principal_back > 0 ? data[i][j].principal_back+'%' : '-')+'</td>'
+					+'<td>'+(data[i][j].principal_release < 100 ? data[i][j].principal_release+'% fee' : '-')+'</td>'
+					+'</tr>');
+				tr.appendTo($(t).find('tbody:first'));
+			}
+			t.appendTo('#planst');
+		}
+
+		$('#openCalc').show();
+	}
+}
+fillWhois = function(data) {
+	if (data) {
+		$('#whDomRegistrant').html(data.domain.registrant);
+		$('#whDomCreated').html(data.domain.created);
+		$('#whDomExpires').html(data.domain.expires);
+		$('#whDomNS').html(data.domain.ns.replace(/,/g, '<br>'));
+		$('#whIPAddr').html(data.ip.addr);
+		$('#whIPHoster').html(data.ip.hoster);
+		$('#whIPCountry').html(data.ip.country);
+		$('#whSSL').html(data.ssl.registered);
+		if (data.ssl.registered != 'No') {
+			$('#whSSLRegistar').html(data.ssl.registrar.replace(/\n/g, '<br>'));
+			$('#whSSLExpires').html(data.ssl.expires);
+		}
+
+		$('#openWhois').show();
+	}
+}
+fillRCB = function(data) {
+	if (data && data.length > 0) {
+		t = $('<table class="plansTable" id="rcbTable" cellspacing=1 cellpadding=0>'+
+		'<tbody><tr><th>Monitor</th><th>Investment</th><th>First Deposit</th><th>Next Deposit</th><th>RCB Amount</th></tr></tbody></table>');
+		for (i in data) {
+			data[i].domain = data[i].d.match(/:\/\/(www[0-9]?\.)?([^/:]+)/)[2];
+			for (j in data[i].r) {
+				d = data[i].r[j];
+				d.min = parseFloat(d.mn);
+				d.max = parseFloat(d.mx);
+				d.frcb = parseFloat(d.fp);
+				d.fbonus = parseFloat(d.fb);
+				d.rrcb = parseFloat(d.rp);
+				d.rbonus = parseFloat(d.rb);
+
+
+				tr = $('<tr>'
+					+(j==0? '<td class="monrow" rowspan='+(data[i].r.length)+'><a href="'+data[i].d+'" target=_blank class="mbutton"><img class="imgloading" src="'+data[i].i+'" border=0></a></td>' : '')
+					+'<td>$<span class="min">'+d.min+'</span> - '+(d.max>0 ? '$<span class="max">'+d.max+'</span>' : 'and more')+'</td>'
+					+'<td>'+(d.frcb > 0 ? '<span class="fr">'+d.frcb+'</span>%' : '-')+(d.fbonus > 0 ? ' + $<span class="fb">'+d.fbonus+'</span>' : '')+'</td>'
+					+'<td>'+(d.rrcb > 0 ? '<span class="rr">'+d.rrcb+'</span>%' : '-')+(d.rbonus > 0 ? ' + $<span class="rb">'+d.rbonus+'</span>' : '')+'</td>'
+					+'<td class="amnt"> ? </td>'
+					+'</tr>');
+				tr.appendTo($(t).find('tbody:first'));
+			}
+			if (i < data.length-1) {
+				tr = $('<tr><td colspan=7 class="rcbspace"></td></tr>');
+				tr.appendTo($(t).find('tbody:first'));
+			}
+		}
+		t.appendTo('#rcb');
+
+		$('#openRCB').show();
+		rcbUpdate();
+	}
+}

@@ -1,0 +1,6 @@
+.LOG
+
+07:17 05/03/2018
+Increase script execution time.
+Just put this command in the begining of your script:
+set_time_limit(0);
